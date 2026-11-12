@@ -15,6 +15,8 @@
     "format": "oxfmt src/"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "tailwindcss": "^4.3.5",
     "vue": "rc",
     "vue-router": "^5.3.1"
   },
@@ -24,7 +26,7 @@
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/eslint-config-typescript": "^14.9.0",
     "@vue/tsconfig": "^0.9.1",
-    "eslint": "^10.10.0",
+    "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-oxlint": "~1.82.0",
     "eslint-plugin-vue": "~10.11.0",
@@ -56,5 +58,8 @@
     "@vue/shared": "rc",
     "@vue/compat": "rc",
     "typescript": "$typescript"
+  },
+  "allowScripts": {
+    "fsevents@2.3.3": true
   }
 }
