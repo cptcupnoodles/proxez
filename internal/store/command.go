@@ -1,7 +1,9 @@
 package store
 
 import (
+	"errors"
 	"fmt"
+	"net"
 	"strings"
 )
 
@@ -34,37 +36,80 @@ func (s *State) Validate(c Command) error {
 	switch c.Op {
 
 	case OpPoolCreate:
-		// shape: pool name is valid (not empty, not too long, safe characters)
 		if err := checkName("pool", c.Pool); err != nil {
 			return err
 		}
-		// shape: strategy is one of the known strategies
-		return checkStrategy(c.Strategy)
-		// state: a pool with this name must NOT already exist
-		if _, ok := s.Pool[c.Pool]; ok {
+
+		if err := checkStrategy(c.Strategy); err != nil {
+			return err
+		}
+
+		if _, ok := s.Pools[c.Pool]; ok {
 			return fmt.Errorf("pool %q already exist", c.Pool)
 		}
 
 	case OpPoolDelete:
-		// state: the pool must exist
-		// state: no route may still point to this pool
-		//        (loop over s.Routes, compare r.Pool)
+
+		if _, ok := s.Pools[c.Pool]; !ok {
+			return fmt.Errorf("pool %q does not exist", c.Pool)
+		}
+
+		for _, r := range s.Routes {
+			if r.Pool == c.Pool {
+				return fmt.Errorf("pool %q is used by route %s%s", c.Pool, r.Host, r.PathPrefix)
+			}
+		}
 
 	case OpStrategySet:
-		// shape: strategy is one of the known strategies
-		// state: the pool must exist
+		if err := checkStrategy(c.Strategy); err != nil {
+			return err
+		}
+
+		if _, ok := s.Pools[c.Pool]; !ok {
+			return fmt.Errorf("pool %q does not exist", c.Pool)
+		}
 
 	case OpBackendAdd:
-		// shape: backend name is valid
-		// shape: address is a valid host:port (net.SplitHostPort)
-		// shape: weight is at least 1
+
+		if err := checkName("backend", c.Backend); err != nil {
+			return err
+		}
+		// address is a valid host:port (net.SplitHostPort)
+		if _, _, err := net.SplitHostPort(c.Address); err != nil {
+			return fmt.Errorf("invalid address %q: %w", c.Address, err)
+		}
+
+		if c.Weight == 0 {
+			return errors.New("weight must be at least 1")
+		}
+
 		// state: the pool must exist
+		p, ok := s.Pools[c.Pool]
+		if !ok {
+			return fmt.Errorf("pool %q does not exist", c.Pool)
+		}
+
 		// state: no backend with this name may already be in that pool
 		// (optional, your decision) state: reject a duplicate address in the pool
+		for _, b := range p.Backends {
+			if b.Name == c.Backend {
+				return fmt.Errorf("backend %q already in pool %q", c.Backend, c.Pool)
+			}
+		}
 
 	case OpBackendRemove:
 		// state: the pool must exist
+		p, ok := s.Pools[c.Pool]
+		if !ok {
+			return fmt.Errorf("pool %q does not exist", c.Pool)
+		}
+
 		// state: a backend with this name must exist in that pool
+		for _, b := range p.Backends {
+			if b.Name == c.Backend {
+				// proceed to remove
+			}
+		}
 
 	case OpWeightSet:
 		// shape: weight is at least 1
@@ -81,7 +126,7 @@ func (s *State) Validate(c Command) error {
 		// state: a route with this host AND path prefix must exist
 
 	default:
-		// unknown op (including 0): return an error
+		return fmt.Errorf("unknown op %d", c.Op)
 	}
 	return nil
 }
