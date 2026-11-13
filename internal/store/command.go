@@ -70,7 +70,6 @@ func (s *State) Validate(c Command) error {
 		}
 
 	case OpBackendAdd:
-
 		if err := checkName("backend", c.Backend); err != nil {
 			return err
 		}
@@ -97,23 +96,18 @@ func (s *State) Validate(c Command) error {
 		}
 
 	case OpBackendRemove:
-		// state: the pool must exist
 		p, ok := s.Pools[c.Pool]
 		if !ok {
 			return fmt.Errorf("pool %q does not exist", c.Pool)
 		}
 
-		// state: a backend with this name must exist in that pool
-		found := false
-		for _, b := range p.Backends {
-			if b.Name == c.Backend {
-				found = true
-			}
+		if findBackend(p, c.Backend) < 0 {
+			return fmt.Errorf("backend %q does not exist in pool %q", c.Backend, c.Pool)
 		}
 
 	case OpWeightSet:
 		if c.Weight <= 0 {
-			return fmt.Errorf("weight should be atleast 1")
+			return fmt.Errorf("weight should be at least 1")
 		}
 
 		p, ok := s.Pools[c.Pool]
@@ -121,17 +115,19 @@ func (s *State) Validate(c Command) error {
 			return fmt.Errorf("pool %q dies not exist", c.Pool)
 		}
 
-		found := false
-		for _, b := range p.Backends {
-			if b.Name == c.Backend {
-				found = true
-			}
+		if findBackend(p, c.Backend) < 0 {
+			return fmt.Errorf("backend %q does not exist in pool %q", c.Backend, c.Pool)
 		}
 
 	case OpRouteAdd:
 		// shape: host is not empty
 		// shape: path prefix starts with "/"
+		if err := checkRoute(c.Host, c.PathPrefix); err != nil {
+			return err
+		}
+
 		// state: the pool it points to must exist
+
 		// state: no route with the same host AND path prefix may already exist
 
 	case OpRouteRemove:
@@ -187,11 +183,20 @@ func checkStrategy(s string) error {
 
 func checkRoute(host, prefix string) error {
 	if host == "" {
-		return fmt.Errorf("route hostis required")
+		return fmt.Errorf("route host required")
 	}
 
 	if !strings.HasPrefix(prefix, "/") {
 		return fmt.Errorf("path prefix %q must start with /", prefix)
 	}
 	return nil
+}
+
+func findBackend(p *PoolState, name string) int {
+	for i, b := range p.Backends {
+		if b.Name == name {
+			return i
+		}
+	}
+	return -1
 }
