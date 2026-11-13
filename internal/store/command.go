@@ -83,7 +83,6 @@ func (s *State) Validate(c Command) error {
 			return errors.New("weight must be at least 1")
 		}
 
-		// state: the pool must exist
 		p, ok := s.Pools[c.Pool]
 		if !ok {
 			return fmt.Errorf("pool %q does not exist", c.Pool)
@@ -105,16 +104,29 @@ func (s *State) Validate(c Command) error {
 		}
 
 		// state: a backend with this name must exist in that pool
+		found := false
 		for _, b := range p.Backends {
 			if b.Name == c.Backend {
-				// proceed to remove
+				found = true
 			}
 		}
 
 	case OpWeightSet:
-		// shape: weight is at least 1
-		// state: the pool must exist
-		// state: the backend must exist in that pool
+		if c.Weight <= 0 {
+			return fmt.Errorf("weight should be atleast 1")
+		}
+
+		p, ok := s.Pools[c.Pool]
+		if !ok {
+			return fmt.Errorf("pool %q dies not exist", c.Pool)
+		}
+
+		found := false
+		for _, b := range p.Backends {
+			if b.Name == c.Backend {
+				found = true
+			}
+		}
 
 	case OpRouteAdd:
 		// shape: host is not empty
