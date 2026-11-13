@@ -32,6 +32,12 @@ type Command struct {
 	PathPrefix string
 }
 
+var knownStrategies = map[string]bool{
+	"round_robin":                 true,
+	"smooth_weighted_round_robin": true,
+	"least_connection":            true,
+}
+
 func (s *State) Validate(c Command) error {
 	switch c.Op {
 
@@ -49,7 +55,6 @@ func (s *State) Validate(c Command) error {
 		}
 
 	case OpPoolDelete:
-
 		if _, ok := s.Pools[c.Pool]; !ok {
 			return fmt.Errorf("pool %q does not exist", c.Pool)
 		}
@@ -120,16 +125,19 @@ func (s *State) Validate(c Command) error {
 		}
 
 	case OpRouteAdd:
-		// shape: host is not empty
-		// shape: path prefix starts with "/"
 		if err := checkRoute(c.Host, c.PathPrefix); err != nil {
 			return err
 		}
 
-		// state: the pool it points to must exist
+		if _, ok := s.Pools[c.Pool]; !ok {
+			return fmt.Errorf("pool %q does not exist", c.Pool)
+		}
 
-		// state: no route with the same host AND path prefix may already exist
-
+		for _, v := range s.Routes {
+			if v.Host == c.Host || v.PathPrefix == c.PathPrefix {
+				return fmt.Errorf("route %q already exists in pool %q", v.Host, c.Pool)
+			}
+		}
 	case OpRouteRemove:
 		// state: a route with this host AND path prefix must exist
 
@@ -165,12 +173,6 @@ func checkName(kind, name string) error {
 	}
 	return nil
 
-}
-
-var knownStrategies = map[string]bool{
-	"round_robin":                 true,
-	"smooth_weighted_round_robin": true,
-	"least_connection":            true,
 }
 
 func checkStrategy(s string) error {
