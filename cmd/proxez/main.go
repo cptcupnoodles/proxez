@@ -1,12 +1,15 @@
 package main
 
 import (
+	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
+	"proxez/m/web"
 
-	"highwire/m/internal/backend"
-	"highwire/m/internal/proxy"
-	"highwire/m/internal/strategy"
+	"proxez/m/internal/backend"
+	"proxez/m/internal/proxy"
+	"proxez/m/internal/strategy"
 )
 
 func main() {
@@ -17,7 +20,7 @@ func main() {
 		backend.New("charlie", "http://127.0.0.1:9002", 2),
 	}
 
-	strategy := strategy.NewStrategy()
+	stratSelection := strategy.NewStrategy()
 
 	// Health check all the registered backends
 	for i := range backends {
@@ -30,27 +33,45 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 
 		// Implement a backend seletion strategy
-		backend, err := strategy.WeightedRoundRobin(backends)
+		selectedBackend, err := stratSelection.WeightedRoundRobin(backends)
 
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
 		}
 
-		if err := backend.Start(); err != nil {
+		if err := selectedBackend.Start(); err != nil {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
 		}
 
 		defer func() {
-			_ = backend.Complete()
+			_ = selectedBackend.Complete()
 		}()
 
 		// Implement the proxy
-		proxy.Proxy(backend, w, r)
+		proxy.Proxy(selectedBackend, w, r)
 
 	})
 
+	// parse the admin page at startup
+	tmpl := template.Must(template.ParseFS(web.Files, "templates/index.html"))
+
+	staticFS, err := fs.Sub(web.Files, "static")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	mux.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
+		data := map[string]string{"Title": "Load balancer admin"}
+		if err := tmpl.Execute(w, data); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
+
 	log.Println("proxy listening on http://127.0.0.1:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Println("admin page on http://localhost:8080/admin")
+	log.Fatal(http.ListenAndServe(":8080", mux))
 }

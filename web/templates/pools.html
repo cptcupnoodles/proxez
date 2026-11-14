@@ -1,0 +1,22 @@
+{{define "pools"}}
+{{range .Pools}}
+<section>
+    <h2>{{.Name}} <small>({{.Strategy}})</small></h2>
+    <ul>
+        {{range .Backends}}
+        <li>
+            {{.Name}} {{.Address}} weight={{.Weight}}
+            <button hx-delete="/admin/pools/{{$.Name}}/backends/{{.Name}}"
+                    hx-target="#pools" hx-confirm="Remove this backend?">remove</button>
+        </li>
+        {{end}}
+    </ul>
+    <form hx-post="/admin/pools/{{.Name}}/backends" hx-target="#pools">
+        <input name="name" placeholder="name">
+        <input name="address" placeholder="10.0.0.1:3000">
+        <input name="weight" type="number" value="1" min="1">
+        <button>Add backend</button>
+    </form>
+</section>
+{{end}}
+{{end}}

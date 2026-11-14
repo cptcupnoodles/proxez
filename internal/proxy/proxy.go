@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"highwire/m/internal/backend"
+	"proxez/m/internal/backend"
 )
 
 func Proxy(backend *backend.Backend, w http.ResponseWriter, r *http.Request) {

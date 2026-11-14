@@ -2,7 +2,7 @@ package strategy
 
 import (
 	"fmt"
-	"highwire/m/internal/backend"
+	"proxez/m/internal/backend"
 	"sync"
 )
 
