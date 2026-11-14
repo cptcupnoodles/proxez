@@ -1,3 +1,3 @@
-module highwire/m
+module proxez/m
 
 go 1.27.1

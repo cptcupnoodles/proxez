@@ -111,13 +111,13 @@ func (s *State) Validate(c Command) error {
 		}
 
 	case OpWeightSet:
-		if c.Weight <= 0 {
+		if c.Weight == 0 {
 			return fmt.Errorf("weight should be at least 1")
 		}
 
 		p, ok := s.Pools[c.Pool]
 		if !ok {
-			return fmt.Errorf("pool %q dies not exist", c.Pool)
+			return fmt.Errorf("pool %q does not exist", c.Pool)
 		}
 
 		if findBackend(p, c.Backend) < 0 {
@@ -134,12 +134,22 @@ func (s *State) Validate(c Command) error {
 		}
 
 		for _, v := range s.Routes {
-			if v.Host == c.Host || v.PathPrefix == c.PathPrefix {
+			if v.Host == c.Host && v.PathPrefix == c.PathPrefix {
 				return fmt.Errorf("route %q already exists in pool %q", v.Host, c.Pool)
 			}
 		}
 	case OpRouteRemove:
 		// state: a route with this host AND path prefix must exist
+		found := false
+		for _, v := range s.Routes {
+			if v.Host == c.Host && v.PathPrefix == c.PathPrefix {
+				found = true
+			}
+		}
+
+		if !found {
+			return fmt.Errorf("route %q%q does not exist", c.Host, c.PathPrefix)
+		}
 
 	default:
 		return fmt.Errorf("unknown op %d", c.Op)
