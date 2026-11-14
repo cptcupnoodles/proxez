@@ -9,7 +9,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/status-in%20development-orange" alt="Development status">
   <img src="https://img.shields.io/badge/protocol-Layer%207-blue" alt="Layer 7">
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
+  <img src="https://img.shields.io/badge/license-Apache2.0-green" alt="MIT License">
 </p>
 
 # Proxez
