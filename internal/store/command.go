@@ -1,9 +1,13 @@
+// Package store holds the load balancer's saved configuration: which pools
+// exist, which backends each pool has, and which routes send traffic to which pool.
+
 package store
 
 import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 )
 
@@ -30,12 +34,6 @@ type Command struct {
 	Weight     uint32
 	Host       string
 	PathPrefix string
-}
-
-var knownStrategies = map[string]bool{
-	"round_robin":                 true,
-	"smooth_weighted_round_robin": true,
-	"least_connection":            true,
 }
 
 func (s *State) Validate(c Command) error {
@@ -92,8 +90,6 @@ func (s *State) Validate(c Command) error {
 			return fmt.Errorf("pool %q does not exist", c.Pool)
 		}
 
-		// state: no backend with this name may already be in that pool
-		// (optional, your decision) state: reject a duplicate address in the pool
 		for _, b := range p.Backends {
 			if b.Name == c.Backend {
 				return fmt.Errorf("backend %q already in pool %q", c.Backend, c.Pool)
@@ -139,7 +135,6 @@ func (s *State) Validate(c Command) error {
 			}
 		}
 	case OpRouteRemove:
-		// state: a route with this host AND path prefix must exist
 		found := false
 		for _, v := range s.Routes {
 			if v.Host == c.Host && v.PathPrefix == c.PathPrefix {
@@ -158,10 +153,85 @@ func (s *State) Validate(c Command) error {
 }
 
 func (s *State) Apply(c Command) {
+	switch c.Op {
 
+	case OpPoolCreate:
+		// add a new PoolState to s.Pools: name, strategy, no backends yet
+		s.Pools[c.Pool] = &PoolState{Name: c.Pool, Strategy: c.Strategy}
+
+	case OpPoolDelete:
+		// delete the pool from s.Pools
+		delete(s.Pools, c.Pool)
+
+	case OpStrategySet:
+		// set the Strategy field on the pool
+		s.Pools[c.Pool].Strategy = c.Strategy
+
+	case OpBackendAdd:
+		// append a BackendState (name, address, weight) to the pool's Backends
+		p := s.Pools[c.Pool]
+		p.Backends = append(s.Pools[c.Pool].Backends, BackendState{
+			Name:    c.Backend,
+			Address: c.Address,
+			Weight:  c.Weight,
+		})
+
+	case OpBackendRemove:
+		// find the backend's index with findBackend
+		p, _ := s.Pools[c.Pool]
+		i := findBackend(p, c.Backend)
+		// remove it from the slice:
+		p.Backends = slices.Delete(p.Backends, i, i+1)
+
+	case OpWeightSet:
+		// find the backend's index with findBackend
+		p, _ := s.Pools[c.Pool]
+		i := findBackend(p, c.Backend)
+		// set Backends[i].Weight
+		p.Backends[i].Weight = c.Weight
+
+	case OpRouteAdd:
+		// append a RouteState (host, prefix, pool) to s.Routes
+		s.Routes = append(s.Routes, RouteState{
+			Host:       c.Host,
+			PathPrefix: c.PathPrefix,
+			Pool:       c.Pool,
+		})
+
+	case OpRouteRemove:
+		// find the route with this host AND prefix
+		for i, r := range s.Routes {
+			if r.Host == c.Host && r.PathPrefix == c.PathPrefix {
+				// remove it from s.Routes (same slice trick as the backend removal)
+				s.Routes = slices.Delete(s.Routes, i, i+1)
+				break
+			}
+		}
+
+	default:
+		panic(fmt.Sprintf("store: Apply called with unknown op %d", c.Op))
+	}
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+//
+// Small functions shared by Validate and Apply. They hold the rules
+// that several ops have in common, so each rule is written in one place:
+//
+//   - checkName, checkStrategy and checkRoute check the shape of a value.
+//     They look only at the value itself, never at the current State.
+//   - findBackend looks up an item in the State and returns its index.
+//
+// ---------------------------------------------------------------------------
+
 const maxNameLen = 100
+
+var knownStrategies = map[string]bool{
+	"round_robin":                 true,
+	"smooth_weighted_round_robin": true,
+	"least_connection":            true,
+}
 
 func checkName(kind, name string) error {
 	if name == "" {
