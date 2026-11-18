@@ -38,6 +38,7 @@ func encodeCommand(c Command) ([]byte, error) {
 	}
 
 	b := make([]byte, 0, 64)
+	// adds the sequence number to the end of b, as exactly 8 bytes.
 	b = binary.LittleEndian.AppendUint64(b, c.Seq)
 	b = append(b, byte(c.Op))
 
