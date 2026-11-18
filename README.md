@@ -14,83 +14,105 @@
 
 # Proxez
 
-Proxez is a Layer 7 reverse proxy and load-balancing platform for routing HTTP traffic and distributing requests across upstream services.
+Proxez is a Layer 7 HTTP reverse proxy and load balancer, written in Go with
+no third-party dependencies.
 
-It provides configurable traffic routing, multiple load-balancing algorithms, upstream management, and a web interface for managing proxy deployments.
+It routes incoming HTTP requests to healthy upstream services using:
 
-Proxez is designed for reliable service delivery across local environments, self-hosted infrastructure, and production deployments.
+- Round robin
+- Smooth weighted round robin
+- Least connections *(planned)*
+
+> **Work in progress.** Proxez is a learning project that is being built in
+> the open. Check the progress list below before relying on a feature.
 
 ## Status
 
 Proxez is under active development.
 
-The core proxy and load-balancing features are being developed first. The web interface is also under development.
+### Proxy core
+- [x] HTTP/1.1 request forwarding
+- [x] Backend selection: round robin
+- [x] Backend selection: smooth weighted round robin
+- [ ] Backend selection: least connections
+- [x] Shared backend state (health, active requests, failures)
+- [x] Health checks *(temporary: calls `/health` on each backend)*
+- [ ] Failure handling (retry, mark unhealthy on errors)
+- [ ] Graceful shutdown
+- [ ] Multiple pools, each with its own backends and strategy
+- [ ] Routing by host and path prefix
 
-The configuration format, APIs, and user interface may change before the first stable release.
+### Configuration storage
+- [x] Commands and validation (`Validate`)
+- [x] Applying commands to the in-memory config (`Apply`)
+- [x] Binary encoding of commands
+- [x] Write-ahead log with checksums and sync to disk
+- [x] Crash recovery (replay the log, cut a half-written tail)
+- [x] Exclusive lock on the data folder
+- [ ] Snapshots and log compaction
+- [ ] Log segments and rotation
 
-Do not use Proxez in production until a stable release is available.
+### Admin
+- [ ] Admin page served from the binary (`go:embed`)
+- [ ] Add and remove pools, backends and routes from the page
+- [ ] Live health and request counters
+- [ ] Metrics and logs
 
-## Features
+### Not planned (for now)
+- HTTPS termination
+- WebSocket proxying
+- HTTP/2 upstreams
+- Automatic service discovery
 
-- Layer 7 reverse proxying
-- HTTP traffic routing
-- Multiple upstream servers
-- Smooth weighted round-robin load balancing
-- Least-connections load balancing
-- Upstream server configuration
-- Proxy configuration management
-- Developer-focused web interface
-- Deployment workflow under development
+## Requirements
 
-## Load-Balancing Algorithms
+- Go 1.23 or later
+- Linux or macOS *(Windows is not supported yet: the data folder lock uses
+  `flock`)*
+- Network access to the configured upstream services
 
-### Smooth Weighted Round Robin
+## Install
 
-Smooth weighted round robin distributes traffic according to the configured weight of each upstream server.
+```bash
+go install github.com/cptcupnoodles/proxez/cmd/proxez@latest
+```
 
-Example:
+Or build from source:
 
-| Upstream | Weight |
-|---|---:|
-| Server A | 5 |
-| Server B | 3 |
-| Server C | 2 |
+```bash
+git clone https://github.com/cptcupnoodles/proxez
+cd proxez
+go build -o bin/proxez ./cmd/proxez
+```
 
-The expected traffic distribution is approximately 50%, 30%, and 20%.
+## Run
 
-### Least Connections
+```bash
+./bin/proxez -data ./data
+```
 
-Least connections sends each new request to the upstream server with the fewest active connections.
+| Flag | Default | Meaning |
+|---|---|---|
+| `-data` | `./data` | Folder for the config log (and snapshots, later) |
 
-This algorithm is useful when requests have different processing times.
+Only one Proxez process can use a data folder at a time.
 
-## Web Interface
+## How it works
 
-The Proxez web interface is under development.
+Configuration changes are written as small commands to an append-only log
+before they are applied in memory. On startup the log is replayed to rebuild
+the config.
 
-The planned interface will provide:
+```
+admin change -> Validate -> append to log and sync -> Apply -> live pools
+```
 
-- Proxy creation and configuration
-- Upstream server management
-- Load-balancing algorithm selection
-- Server weight configuration
-- Service status
-- Connection information
-- Runtime configuration management
-- Logs and basic diagnostics
-- Deployment workflows
+Live data such as health and request counters is not saved. It is rebuilt
+on every start.
 
-## Architecture
+## Development
 
-```text
-                    ┌──────────────┐
-Client Request ────▶│ Layer 7 Proxy│
-                    └──────┬───────┘
-                           │
-                    ┌──────▼───────┐
-                    │ Load Balancer│
-                    └──────┬───────┘
-                           │
-             ┌─────────────┼─────────────┐
-             ▼             ▼             ▼
-        Upstream A     Upstream B     Upstream C
+```bash
+go vet ./...
+go test -race -count=1 ./...
+```
