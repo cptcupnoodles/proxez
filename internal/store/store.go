@@ -183,7 +183,7 @@ func syncDir(dir string) error {
 // process can use it at a time. It creates the LOCK file if it doesn't exist
 // and asks the operating system for a lock on it (flock).
 func lockDir(dir string) (*os.File, error) {
-	f, err := os.OpenFile(filepath.Join(dir, "LOCK"), os.O_APPEND|os.O_RDWR, 0o600)
+	f, err := os.OpenFile(filepath.Join(dir, "LOCK"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err
 	}
